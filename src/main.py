@@ -8,14 +8,21 @@ import platform
 from threading import Thread
 import threading
 from io import StringIO
-from streamlit_autorefresh import st_autorefresh
 
-st_autorefresh(interval=1000, key="refresh")
+if "build_lib" not in st.session_state:
+    if platform.system() == "Windows":
+        subprocess.call(["build.bat"], shell=True)
+    else:
+        subprocess.call(["bash", "build.sh"], shell=True)
+    st.session_state.build_lib = True 
 
 if platform.system() == "Windows":
     lib = ctypes.CDLL(r"build/orderbook.dll")
 else:
     lib = ctypes.CDLL(r"build/orderbook.so")
+
+from streamlit_autorefresh import st_autorefresh
+st_autorefresh(interval=1000, key="refresh")
 
 class order(Structure):
     _fields_ = [
