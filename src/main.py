@@ -5,6 +5,7 @@ import pandas as pd
 import time
 import os
 import platform
+import subprocess
 from threading import Thread
 import threading
 from io import StringIO
