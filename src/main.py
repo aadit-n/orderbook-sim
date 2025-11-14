@@ -12,9 +12,11 @@ from io import StringIO
 
 if "build_lib" not in st.session_state:
     if platform.system() == "Windows":
-        subprocess.call(["build.bat"], shell=True)
+        result = subprocess.run(["build.bat"], capture_output=True)
+        result.check_returncode
     else:
-        subprocess.call(["bash", "build.sh"], shell=True)
+        result = subprocess.run(["bash", "build.sh"], capture_output=True)
+        result.check_returncode
     st.session_state.build_lib = True 
 
 if platform.system() == "Windows":
