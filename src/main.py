@@ -19,13 +19,13 @@ if "build_lib" not in st.session_state:
         result.check_returncode
     st.session_state.build_lib = True 
 
+from streamlit_autorefresh import st_autorefresh
+st_autorefresh(interval=1000, key="refresh")
+
 if platform.system() == "Windows":
     lib = ctypes.CDLL(r"build/orderbook.dll")
 else:
     lib = ctypes.CDLL(r"build/orderbook.so")
-
-from streamlit_autorefresh import st_autorefresh
-st_autorefresh(interval=1000, key="refresh")
 
 class order(Structure):
     _fields_ = [
