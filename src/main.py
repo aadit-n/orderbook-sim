@@ -15,7 +15,7 @@ if "build_lib" not in st.session_state:
         result = subprocess.run(["build.bat"], capture_output=True)
         result.check_returncode
     else:
-        result = subprocess.run(["bash", "build.sh"], capture_output=True)
+        result = subprocess.run(["build.sh"], capture_output=True)
         result.check_returncode
     st.session_state.build_lib = True 
 
