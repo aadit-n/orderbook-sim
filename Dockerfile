@@ -14,6 +14,6 @@ RUN g++ -std=c++17 -O2 -fPIC -Iinclude \
 
 RUN pip install -r requirements.txt
 
-EXPOSE 8501
+EXPOSE 8580
 
 CMD ["streamlit", "run", "src/main.py"]
