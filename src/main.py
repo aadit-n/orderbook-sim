@@ -10,6 +10,106 @@ from threading import Thread
 import threading
 from io import StringIO
 
+st.set_page_config(
+    page_title="Orderbook Simulator",
+    page_icon="📈",
+    layout="wide",
+)
+
+st.markdown(
+    """
+    <style>
+      :root {
+        --bg: #0f1419;
+        --panel: #151b22;
+        --panel-2: #1b2330;
+        --accent: #f4c95d;
+        --accent-2: #6ee7b7;
+        --text: #e6edf3;
+        --muted: #9aa4b2;
+        --danger: #ff6b6b;
+      }
+
+      .stApp {
+        background:
+          radial-gradient(1200px 600px at 15% 0%, #1e2533 0%, transparent 60%),
+          radial-gradient(900px 500px at 85% 10%, #1a2230 0%, transparent 60%),
+          var(--bg);
+        color: var(--text);
+      }
+
+      .block-container { padding-top: 2rem; }
+
+      .title-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: linear-gradient(135deg, #1a2230 0%, #131a23 100%);
+        border: 1px solid #202938;
+        border-radius: 16px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      }
+      .title-wrap h1 { margin: 0; font-size: 1.6rem; }
+      .title-meta { color: var(--muted); font-size: 0.9rem; }
+
+      .metric-card {
+        background: var(--panel);
+        border: 1px solid #202938;
+        border-radius: 14px;
+        padding: 10px 12px;
+      }
+
+      .section-card {
+        background: var(--panel);
+        border: 1px solid #202938;
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+      }
+
+      .section-title {
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 6px;
+      }
+
+      .stDataFrame, .stTable {
+        background: var(--panel-2);
+        border-radius: 12px;
+        border: 1px solid #202938;
+      }
+
+      .stSidebar {
+        background: #0e131a;
+        border-right: 1px solid #202938;
+      }
+
+      .stButton>button {
+        background: var(--accent);
+        color: #111;
+        border: 0;
+        border-radius: 10px;
+        padding: 0.55rem 1rem;
+        font-weight: 600;
+      }
+      .stButton>button:hover { filter: brightness(0.95); }
+
+      .badge {
+        background: #1f2937;
+        border: 1px solid #2b3445;
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 2px 10px;
+        font-size: 0.75rem;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 def _load_native_lib() -> ctypes.CDLL:
     root = Path(__file__).resolve().parents[1]
     build_dir = root / "build"
@@ -90,7 +190,18 @@ lib.get_trades_snapshot.restype = ctypes.c_char_p
 lib.make_user_order.argtypes = [c_int, c_char_p, c_int, c_float, c_char_p]
 lib.make_user_order.restype = POINTER(order)
 
-st.title("Live Order Book Simulation")
+st.markdown(
+    """
+    <div class="title-wrap">
+      <div>
+        <h1>Live Order Book Simulation</h1>
+        <div class="title-meta">Real-time matching • Configurable flow • Portfolio P&L</div>
+      </div>
+      <div class="badge">v1.0</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 if "initialized" not in st.session_state:
     st.session_state.book = lib.creatBook()
@@ -369,19 +480,21 @@ if snapshot.strip():
         "PRICE", ascending=True
     )
 
+    st.markdown('<div class="section-card"><div class="section-title">Order Book</div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Buy Orders")
         if len(buy_df) <= st.session_state.table_style_limit:
-            st.dataframe(buy_df.style.apply(highlight_user_orders, axis=1))
+            st.dataframe(buy_df.style.apply(highlight_user_orders, axis=1), use_container_width=True)
         else:
-            st.dataframe(buy_df)
+            st.dataframe(buy_df, use_container_width=True)
     with col2:
         st.subheader("Sell Orders")
         if len(sell_df) <= st.session_state.table_style_limit:
-            st.dataframe(sell_df.style.apply(highlight_user_orders, axis=1))
+            st.dataframe(sell_df.style.apply(highlight_user_orders, axis=1), use_container_width=True)
         else:
-            st.dataframe(sell_df)
+            st.dataframe(sell_df, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
     has_bid = not buy_df.empty
     has_ask = not sell_df.empty
 
@@ -436,13 +549,14 @@ if snapshot.strip():
 else:
     st.info("Order book is empty.")
 
+st.markdown('<div class="section-card"><div class="section-title">Market Snapshot</div>', unsafe_allow_html=True)
 c1, c2, c3, c4 = st.columns(4)
 with c1:
     st.metric("Best Bid", f"${st.session_state.best_bid:.2f}")
     st.metric("Best Ask", f"${st.session_state.best_ask:.2f}")
     st.metric("Midprice", f"${st.session_state.midprice:.2f}")
 with c2:
-    st.metric("OBI", f"${st.session_state.obi:.2f}")
+    st.metric("OBI", f"{st.session_state.obi:.2f}")
     st.metric("Relative Spread", f"{st.session_state.relative_spread:.2f}")
     st.metric("Depth Bid", f"{st.session_state.depth_bid}")
 with c3:
@@ -450,11 +564,12 @@ with c3:
     st.metric("VWAP Bid", f"${st.session_state.vwap_bid:.2f}")
     st.metric("VWAP Ask", f"${st.session_state.vwap_ask:.2f}")
 with c4:
-    st.metric("OFI", f"${st.session_state.ofi:.2f}")
+    st.metric("OFI", f"{st.session_state.ofi:.2f}")
     st.metric("Queue Pressure", f"{st.session_state.queue_pressure:.2f}")
     st.metric("Microprice", f"${st.session_state.microprice:.2f}")
+st.markdown("</div>", unsafe_allow_html=True)
 
-st.subheader("Trades")
+st.markdown('<div class="section-card"><div class="section-title">Trades</div>', unsafe_allow_html=True)
 
 trades_ptr = lib.get_trades_snapshot(
     ctypes.cast(st.session_state.book, POINTER(OrderBook))
@@ -478,7 +593,8 @@ if trades.strip():
 else:
     st.info("No trades executed yet.")
 
-st.subheader("Order Events (Cancelled/Expired)")
+st.markdown("</div>", unsafe_allow_html=True)
+st.markdown('<div class="section-card"><div class="section-title">Order Events (Cancelled/Expired)</div>', unsafe_allow_html=True)
 
 fulfilled_ptr = lib.get_fulfilled_snapshot(
     ctypes.cast(st.session_state.book, POINTER(OrderBook))
@@ -499,6 +615,7 @@ if fulfilled.strip():
     st.dataframe(df_fulfilled)
 else:
     st.info("No order events yet.")
+st.markdown("</div>", unsafe_allow_html=True)
 
 
 def update_user_pnl(trade_row: pd.Series):
@@ -540,7 +657,7 @@ def update_user_pnl(trade_row: pd.Series):
             st.session_state.avg_cost = 0.0
 
 
-st.subheader("User Orders & P&L")
+st.markdown('<div class="section-card"><div class="section-title">User Orders & P&L</div>', unsafe_allow_html=True)
 
 user_trades = None
 if df_trades is not None and not df_trades.empty:
@@ -632,6 +749,7 @@ for oid in sorted(st.session_state.user_orders):
 
 if rows:
     df_orders = pd.DataFrame(rows)
-    st.dataframe(df_orders)
+    st.dataframe(df_orders, use_container_width=True)
 else:
     st.info("No user orders yet.")
+st.markdown("</div>", unsafe_allow_html=True)
