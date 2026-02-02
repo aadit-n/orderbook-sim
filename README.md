@@ -2,6 +2,8 @@
 
 Order book simulation engine with a C++ matching core and a Python runner. It generates synthetic order flow, matches orders, tracks trades, and computes portfolio P&L for user-submitted orders.
 
+**Try it out here - [https://orderbooksimulator.streamlit.app](https://orderbooksimulator.streamlit.app)**
+
 ## Repository structure
 
 - `src/main.py`: Python runner that loads the native library, generates orders, submits user orders, and computes analytics.
