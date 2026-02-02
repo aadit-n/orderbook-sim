@@ -14,17 +14,6 @@ class order{
         string type;
         string status;
         bool operator==(const order& rhs) const { return id == rhs.id; }
-
-    void printOrder(){
-        cout << "Order ID: " << id << "\n";
-        cout << "Side: " << side << "\n";
-        cout << "Quantity: " << quantity << "\n";
-        cout << "Price: " << price << "\n";
-        cout << "Time: " << ctime(&time) << "\n";
-        cout << "Type: " << type << "\n";
-        cout << "Status: " << status << "\n\n";
-    }
 };
 order randomOrder(int &nextID, float basePrice);
-order userGeneratedOrder(int &nextID, string side, int quantity, float price, string type);
 #endif

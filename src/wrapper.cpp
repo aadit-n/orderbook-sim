@@ -18,13 +18,6 @@ extern "C"{
         addOrder(*book, *newOrder);
     }    
 
-    void match_order(OrderBook* book, order* newOrder){
-        matchOrders(*book, *newOrder);
-    }
-
-    void cancel_order(OrderBook* book, int orderID){
-        cancelOrder(*book, orderID);
-    }
 
     const char* get_orderbook_snapshot(OrderBook* book) {
         static std::string snapshot;
@@ -80,17 +73,4 @@ extern "C"{
         return o;
     }
 
-    void add_user_order(OrderBook* book,
-                        int id, const char* side, int quantity, float price, const char* type)
-    {
-        order o;
-        o.id = id;
-        o.side = std::string(side);
-        o.quantity = quantity;
-        o.price = price;
-        o.time = std::time(nullptr);
-        o.type = std::string(type);
-        o.status = "open";
-        addOrder(*book, o);
-    }
 }

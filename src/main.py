@@ -1,16 +1,36 @@
 import ctypes
 from ctypes import c_int, c_float, c_char_p, POINTER, Structure
+from pathlib import Path
 import streamlit as st
 import pandas as pd
 import time
-import os
 import platform
-import subprocess
 from threading import Thread
 import threading
 from io import StringIO
 
-lib = ctypes.CDLL(r"build/orderbook.so")
+def _load_native_lib() -> ctypes.CDLL:
+    root = Path(__file__).resolve().parents[1]
+    build_dir = root / "build"
+    system = platform.system()
+    if system == "Windows":
+        lib_path = build_dir / "orderbook.dll"
+    elif system == "Darwin":
+        lib_path = build_dir / "liborderbook.dylib"
+    else:
+        lib_path = build_dir / "orderbook.so"
+
+    if not lib_path.exists():
+        st.error(
+            f"Native library not found: {lib_path}\n"
+            "Make sure it is built on this system before running the app."
+        )
+        st.stop()
+
+    return ctypes.CDLL(str(lib_path))
+
+
+lib = _load_native_lib()
 
 from streamlit_autorefresh import st_autorefresh
 st_autorefresh(interval=1000, key="refresh")

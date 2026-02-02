@@ -23,7 +23,5 @@ class OrderBook{
     }
 };
 void addOrder(OrderBook &book, order &newOrder);
-void matchOrders(OrderBook &book, order &newOrder);
-void cancelOrder(OrderBook &book, int orderID);
 void orderExpiry(OrderBook &book);
 #endif

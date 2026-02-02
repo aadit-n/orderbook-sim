@@ -40,17 +40,3 @@ order randomOrder(int &nextID, float basePrice){
     return newOrder;
 }
 
-order userGeneratedOrder(int &nextID, string side, int quantity, float price, string type){
-    order newOrder;
-    newOrder.id = nextID++;
-    newOrder.side = side;
-    newOrder.quantity = quantity;
-    newOrder.price = price;
-    newOrder.time = time(0);
-    newOrder.expiry = newOrder.time+20;
-    newOrder.type = type;
-    newOrder.status = "open";
-
-    newOrder.printOrder();
-    return newOrder;
-}
