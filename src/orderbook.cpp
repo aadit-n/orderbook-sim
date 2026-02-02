@@ -5,12 +5,16 @@
 
 using namespace std;
 
-static void recordTrade(OrderBook &book, const order &o, int tradedQty) {
+static void recordTrade(OrderBook &book, const order &o, int tradedQty, float execPrice) {
     if (tradedQty <= 0) return;
-    order filled = o;
-    filled.quantity = tradedQty;
-    filled.status   = "closed";
-    book.fulfilled.push_back(filled);
+    OrderBook::Trade t;
+    t.trade_id = book.next_trade_id++;
+    t.order_id = o.id;
+    t.side = o.side;
+    t.price = execPrice;
+    t.quantity = tradedQty;
+    t.time = time(0);
+    book.trades.push_back(t);
 }
 
 
@@ -36,8 +40,9 @@ void matchOrders(OrderBook &book, order &newOrder) {
                 continue;
             }
 
-            recordTrade(book, newOrder, traded);
-            recordTrade(book, *it,      traded);
+            float exec_price = it->price;
+            recordTrade(book, newOrder, traded, exec_price);
+            recordTrade(book, *it,      traded, exec_price);
 
             newOrder.quantity -= traded;
             it->quantity      -= traded;
@@ -70,8 +75,9 @@ void matchOrders(OrderBook &book, order &newOrder) {
                 continue;
             }
 
-            recordTrade(book, newOrder, traded);
-            recordTrade(book, *it,      traded);
+            float exec_price = it->price;
+            recordTrade(book, newOrder, traded, exec_price);
+            recordTrade(book, *it,      traded, exec_price);
 
             newOrder.quantity -= traded;
             it->quantity      -= traded;
@@ -109,41 +115,31 @@ void addOrder(OrderBook &book, order &newOrder) {
     }
 
     if (newOrder.side == "buy") {
-        bool inserted = false;
-
-        if (book.buy.empty()) {
-            book.buy.push_back(newOrder);
-            inserted = true;
-        } else {
-            for (size_t i = 0; i < book.buy.size(); ++i) {
-                if (newOrder.price > book.buy[i].price) {
-                    book.buy.insert(book.buy.begin() + i, newOrder);
-                    inserted = true;
-                    break;
-                }
-            }
-            if (!inserted) {
-                book.buy.push_back(newOrder);
+        size_t i = 0;
+        for (; i < book.buy.size(); ++i) {
+            if (newOrder.price > book.buy[i].price) {
+                break;
             }
         }
+        for (; i < book.buy.size(); ++i) {
+            if (newOrder.price != book.buy[i].price) {
+                break;
+            }
+        }
+        book.buy.insert(book.buy.begin() + i, newOrder);
     } else { 
-        bool inserted = false;
-
-        if (book.sell.empty()) {
-            book.sell.push_back(newOrder);
-            inserted = true;
-        } else {
-            for (size_t i = 0; i < book.sell.size(); ++i) {
-                if (newOrder.price < book.sell[i].price) {
-                    book.sell.insert(book.sell.begin() + i, newOrder);
-                    inserted = true;
-                    break;
-                }
-            }
-            if (!inserted) {
-                book.sell.push_back(newOrder);
+        size_t i = 0;
+        for (; i < book.sell.size(); ++i) {
+            if (newOrder.price < book.sell[i].price) {
+                break;
             }
         }
+        for (; i < book.sell.size(); ++i) {
+            if (newOrder.price != book.sell[i].price) {
+                break;
+            }
+        }
+        book.sell.insert(book.sell.begin() + i, newOrder);
     }
 }
 
@@ -173,7 +169,7 @@ void cancelOrder(OrderBook &book, int orderID){
 void orderExpiry(OrderBook &book){
     time_t now = time(0);
     for (auto it = book.buy.begin(); it!=book.buy.end();){
-        if (it->expiry<=now){
+        if (it->expiry > 0 && it->expiry<=now){
             it->status = "expired";
             book.fulfilled.push_back(*it);
             it = book.buy.erase(it);
@@ -184,7 +180,7 @@ void orderExpiry(OrderBook &book){
     }
 
     for (auto it = book.sell.begin(); it!=book.sell.end();){
-        if (it ->expiry<=now){
+        if (it->expiry > 0 && it->expiry<=now){
             it->status = "expired";
             it->quantity = 0;
             book.fulfilled.push_back(*it);

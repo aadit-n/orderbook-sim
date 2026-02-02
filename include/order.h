@@ -8,7 +8,7 @@ class order{
         int id;
         string side;
         int quantity;
-        int price;
+        float price;
         time_t time;
         time_t expiry;
         string type;
@@ -16,4 +16,10 @@ class order{
         bool operator==(const order& rhs) const { return id == rhs.id; }
 };
 order randomOrder(int &nextID, float basePrice);
+void setRandomConfig(float tick_size,
+                     float price_sigma,
+                     float market_prob,
+                     int expiry_seconds,
+                     int min_qty,
+                     int max_qty);
 #endif

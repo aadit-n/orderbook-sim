@@ -79,11 +79,14 @@ class OrderBook(Structure):
 lib.creatBook.restype = POINTER(OrderBook)
 lib.generate_random_order.argtypes = [POINTER(c_int), c_float]
 lib.generate_random_order.restype = POINTER(order)
+lib.set_random_config.argtypes = [c_float, c_float, c_float, c_int, c_int, c_int]
 lib.add_order.argtypes = [POINTER(OrderBook), POINTER(order)]
 lib.get_orderbook_snapshot.argtypes = [POINTER(OrderBook)]
 lib.get_orderbook_snapshot.restype = ctypes.c_char_p
 lib.get_fulfilled_snapshot.argtypes = [POINTER(OrderBook)]
 lib.get_fulfilled_snapshot.restype = ctypes.c_char_p
+lib.get_trades_snapshot.argtypes = [POINTER(OrderBook)]
+lib.get_trades_snapshot.restype = ctypes.c_char_p
 lib.make_user_order.argtypes = [c_int, c_char_p, c_int, c_float, c_char_p]
 lib.make_user_order.restype = POINTER(order)
 
@@ -105,6 +108,7 @@ if "initialized" not in st.session_state:
     st.session_state.run_event = threading.Event()
     st.session_state.thread = None
     st.session_state.basePrice = 100.0
+    st.session_state.base_price_ref = c_float(st.session_state.basePrice)
 
     st.session_state.processed_trades = set()
 
@@ -127,13 +131,21 @@ if "initialized" not in st.session_state:
     st.session_state.refresh_count = 0
     st.session_state.table_style_limit = 200
 
+    st.session_state.anchor_mid = True
+    st.session_state.tick_size = 0.01
+    st.session_state.price_sigma = 1.5
+    st.session_state.market_prob = 0.1
+    st.session_state.expiry_seconds = 0
+    st.session_state.min_qty = 1
+    st.session_state.max_qty = 200
+
     st.session_state.initialized = True
 
 
-def run_simulation(run_event, book, nextID, basePrice, batch_size):
+def run_simulation(run_event, book, nextID, base_price_ref, batch_size):
     while run_event.is_set():
         for _ in range(batch_size):
-            o = lib.generate_random_order(ctypes.byref(nextID), c_float(basePrice))
+            o = lib.generate_random_order(ctypes.byref(nextID), c_float(base_price_ref.value))
             lib.add_order(ctypes.cast(book, POINTER(OrderBook)), o)
         time.sleep(0.5)
 
@@ -204,19 +216,83 @@ base_price = st.sidebar.number_input(
 )
 st.session_state.basePrice = base_price
 
+anchor_mid = st.sidebar.checkbox(
+    "Anchor random prices to mid",
+    value=bool(st.session_state.anchor_mid),
+)
+st.session_state.anchor_mid = anchor_mid
+
+tick_size = st.sidebar.number_input(
+    "Tick Size",
+    min_value=0.0001,
+    value=float(st.session_state.tick_size),
+    step=0.01,
+    format="%.4f",
+)
+st.session_state.tick_size = tick_size
+
+price_sigma = st.sidebar.number_input(
+    "Price Sigma",
+    min_value=0.1,
+    value=float(st.session_state.price_sigma),
+    step=0.1,
+)
+st.session_state.price_sigma = price_sigma
+
+market_prob = st.sidebar.slider(
+    "Market Order %",
+    min_value=0,
+    max_value=50,
+    value=int(st.session_state.market_prob * 100),
+    step=1,
+)
+st.session_state.market_prob = market_prob / 100.0
+
+expiry_seconds = st.sidebar.number_input(
+    "Expiry Seconds (0 = GTC)",
+    min_value=0,
+    value=int(st.session_state.expiry_seconds),
+    step=5,
+)
+st.session_state.expiry_seconds = expiry_seconds
+
+min_qty = st.sidebar.number_input(
+    "Min Qty",
+    min_value=1,
+    value=int(st.session_state.min_qty),
+    step=1,
+)
+max_qty = st.sidebar.number_input(
+    "Max Qty",
+    min_value=int(min_qty),
+    value=int(st.session_state.max_qty),
+    step=10,
+)
+st.session_state.min_qty = min_qty
+st.session_state.max_qty = max_qty
+
+lib.set_random_config(
+    c_float(st.session_state.tick_size),
+    c_float(st.session_state.price_sigma),
+    c_float(st.session_state.market_prob),
+    c_int(st.session_state.expiry_seconds),
+    c_int(st.session_state.min_qty),
+    c_int(st.session_state.max_qty),
+)
+
 c1, c2 = st.sidebar.columns(2)
 
 if c1.button("▶ Start"):
     st.session_state.run_event.set()
     book = st.session_state.book
     nextID = st.session_state.nextID
-    basePrice = st.session_state.basePrice
+    base_price_ref = st.session_state.base_price_ref
     batch_size = st.session_state.batch_size
 
     if not st.session_state.thread or not st.session_state.thread.is_alive():
         st.session_state.thread = Thread(
             target=run_simulation,
-            args=(st.session_state.run_event, book, nextID, basePrice, batch_size),
+            args=(st.session_state.run_event, book, nextID, base_price_ref, batch_size),
             daemon=True,
         )
         st.session_state.thread.start()
@@ -308,31 +384,40 @@ if snapshot.strip():
     has_bid = not buy_df.empty
     has_ask = not sell_df.empty
 
+    local_best_bid = buy_df.iloc[0]["PRICE"] if has_bid else 0
+    local_best_ask = sell_df.iloc[0]["PRICE"] if has_ask else 0
+
+    st.session_state.best_bid = local_best_bid if has_bid else 0
+    st.session_state.best_ask = local_best_ask if has_ask else 0
+
+    if st.session_state.anchor_mid and has_bid and has_ask:
+        st.session_state.base_price_ref.value = float(
+            (local_best_bid + local_best_ask) / 2
+        )
+    else:
+        st.session_state.base_price_ref.value = float(st.session_state.basePrice)
+
     st.session_state.refresh_count += 1
     if st.session_state.refresh_count % st.session_state.metrics_every == 0:
         if has_bid:
-            st.session_state.best_bid = buy_df.iloc[0]["PRICE"]
             st.session_state.depth_bid = buy_df["QTY"].sum()
             st.session_state.queue_pressure = buy_df.iloc[0]["QTY"] / st.session_state.depth_bid
             st.session_state.vwap_bid = (buy_df["PRICE"] * buy_df["QTY"]).sum() / st.session_state.depth_bid
         else:
-            st.session_state.best_bid = 0
             st.session_state.depth_bid = 0
             st.session_state.queue_pressure = 0
             st.session_state.vwap_bid = 0
 
         if has_ask:
-            st.session_state.best_ask = sell_df.iloc[0]["PRICE"]
             st.session_state.depth_ask = sell_df["QTY"].sum()
             st.session_state.vwap_ask = (sell_df["PRICE"] * sell_df["QTY"]).sum() / st.session_state.depth_ask
         else:
-            st.session_state.best_ask = 0
             st.session_state.depth_ask = 0
             st.session_state.vwap_ask = 0
 
         if has_bid and has_ask:
-            bid = st.session_state.best_bid
-            ask = st.session_state.best_ask
+            bid = local_best_bid
+            ask = local_best_ask
 
             st.session_state.midprice = (bid + ask) / 2
             st.session_state.obi = (bid - ask) / (bid + ask)
@@ -368,7 +453,31 @@ with c4:
     st.metric("Queue Pressure", f"{st.session_state.queue_pressure:.2f}")
     st.metric("Microprice", f"${st.session_state.microprice:.2f}")
 
-st.subheader("Fulfilled Trades")
+st.subheader("Trades")
+
+trades_ptr = lib.get_trades_snapshot(
+    ctypes.cast(st.session_state.book, POINTER(OrderBook))
+)
+trades = trades_ptr.decode("utf-8")
+
+df_trades = None
+if trades.strip():
+    df_trades = pd.read_csv(StringIO(trades))
+
+    if "TRADE_ID" in df_trades.columns:
+        df_trades["TRADE_ID"] = df_trades["TRADE_ID"].astype(int)
+    if "ORDER_ID" in df_trades.columns:
+        df_trades["ORDER_ID"] = df_trades["ORDER_ID"].astype(int)
+    if "QUANTITY" in df_trades.columns:
+        df_trades["QUANTITY"] = df_trades["QUANTITY"].astype(int)
+    if "PRICE" in df_trades.columns:
+        df_trades["PRICE"] = df_trades["PRICE"].astype(float)
+
+    st.dataframe(df_trades)
+else:
+    st.info("No trades executed yet.")
+
+st.subheader("Order Events (Cancelled/Expired)")
 
 fulfilled_ptr = lib.get_fulfilled_snapshot(
     ctypes.cast(st.session_state.book, POINTER(OrderBook))
@@ -388,11 +497,11 @@ if fulfilled.strip():
 
     st.dataframe(df_fulfilled)
 else:
-    st.info("No trades executed yet.")
+    st.info("No order events yet.")
 
 
 def update_user_pnl(trade_row: pd.Series):
-    tid = int(trade_row["ID"])
+    tid = int(trade_row["TRADE_ID"])
     if tid in st.session_state.processed_trades:
         return
 
@@ -432,16 +541,15 @@ def update_user_pnl(trade_row: pd.Series):
 
 st.subheader("User Trade P&L")
 
-if df_fulfilled is not None and not df_fulfilled.empty:
-    user_trades = df_fulfilled[df_fulfilled["ID"].isin(st.session_state.user_orders)]
+if df_trades is not None and not df_trades.empty:
+    user_trades = df_trades[df_trades["ORDER_ID"].isin(st.session_state.user_orders)]
     user_trades = user_trades[user_trades["QUANTITY"] > 0]
-    user_trades = user_trades[user_trades["STATUS"] == "closed"]
 
     for _, t in user_trades.iterrows():
         update_user_pnl(t)
 
-    if not df_fulfilled.empty:
-        last_prices = df_fulfilled["PRICE"].tail(5)
+    if not df_trades.empty:
+        last_prices = df_trades["PRICE"].tail(5)
         last_price = float(last_prices.mean()) if len(last_prices) > 0 else st.session_state.avg_cost
     else:
         last_price = st.session_state.avg_cost
