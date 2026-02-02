@@ -8,8 +8,7 @@
 using namespace std;
 
 order randomOrder(int &nextID, float basePrice){
-    random_device rd{};
-    mt19937 generator(rd());
+    static thread_local mt19937 generator(random_device{}());
     normal_distribution<float> price(basePrice, 5);
     order newOrder;
     newOrder.id = nextID++;

@@ -59,7 +59,6 @@ def _load_native_lib() -> ctypes.CDLL:
 lib = _load_native_lib()
 
 from streamlit_autorefresh import st_autorefresh
-st_autorefresh(interval=1000, key="refresh")
 
 class order(Structure):
     _fields_ = [
@@ -109,18 +108,76 @@ if "initialized" not in st.session_state:
 
     st.session_state.processed_trades = set()
 
+    st.session_state.best_bid = 0
+    st.session_state.best_ask = 0
+    st.session_state.midprice = 0
+    st.session_state.obi = 0
+    st.session_state.relative_spread = 0
+    st.session_state.depth_bid = 0
+    st.session_state.depth_ask = 0
+    st.session_state.vwap_bid = 0
+    st.session_state.vwap_ask = 0
+    st.session_state.ofi = 0
+    st.session_state.queue_pressure = 0
+    st.session_state.microprice = 0
+
+    st.session_state.batch_size = 10
+    st.session_state.refresh_interval_ms = 1500
+    st.session_state.metrics_every = 3
+    st.session_state.refresh_count = 0
+    st.session_state.table_style_limit = 200
+
     st.session_state.initialized = True
 
 
-def run_simulation(run_event, book, nextID, basePrice):
+def run_simulation(run_event, book, nextID, basePrice, batch_size):
     while run_event.is_set():
-        o = lib.generate_random_order(ctypes.byref(nextID), c_float(basePrice))
-        lib.add_order(ctypes.cast(book, POINTER(OrderBook)), o)
+        for _ in range(batch_size):
+            o = lib.generate_random_order(ctypes.byref(nextID), c_float(basePrice))
+            lib.add_order(ctypes.cast(book, POINTER(OrderBook)), o)
         time.sleep(0.5)
 
 
 
 st.sidebar.header("Simulation Controls")
+
+batch_size = st.sidebar.slider(
+    "Orders per tick",
+    min_value=1,
+    max_value=50,
+    value=int(st.session_state.batch_size),
+    step=1,
+)
+st.session_state.batch_size = batch_size
+
+refresh_interval_ms = st.sidebar.slider(
+    "UI refresh (ms)",
+    min_value=1000,
+    max_value=2000,
+    value=int(st.session_state.refresh_interval_ms),
+    step=250,
+)
+st.session_state.refresh_interval_ms = refresh_interval_ms
+
+metrics_every = st.sidebar.slider(
+    "Metrics update cadence (ticks)",
+    min_value=1,
+    max_value=10,
+    value=int(st.session_state.metrics_every),
+    step=1,
+)
+st.session_state.metrics_every = metrics_every
+
+table_style_limit = st.sidebar.slider(
+    "Row limit for table styling",
+    min_value=50,
+    max_value=500,
+    value=int(st.session_state.table_style_limit),
+    step=50,
+)
+st.session_state.table_style_limit = table_style_limit
+
+st_autorefresh(interval=st.session_state.refresh_interval_ms, key="refresh")
 
 can_change_cash = (
     len(st.session_state.processed_trades) == 0
@@ -154,11 +211,12 @@ if c1.button("▶ Start"):
     book = st.session_state.book
     nextID = st.session_state.nextID
     basePrice = st.session_state.basePrice
+    batch_size = st.session_state.batch_size
 
     if not st.session_state.thread or not st.session_state.thread.is_alive():
         st.session_state.thread = Thread(
             target=run_simulation,
-            args=(st.session_state.run_event, book, nextID, basePrice),
+            args=(st.session_state.run_event, book, nextID, basePrice, batch_size),
             daemon=True,
         )
         st.session_state.thread.start()
@@ -237,51 +295,58 @@ if snapshot.strip():
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Buy Orders")
-        st.dataframe(buy_df.style.apply(highlight_user_orders, axis=1))
+        if len(buy_df) <= st.session_state.table_style_limit:
+            st.dataframe(buy_df.style.apply(highlight_user_orders, axis=1))
+        else:
+            st.dataframe(buy_df)
     with col2:
         st.subheader("Sell Orders")
-        st.dataframe(sell_df.style.apply(highlight_user_orders, axis=1))
+        if len(sell_df) <= st.session_state.table_style_limit:
+            st.dataframe(sell_df.style.apply(highlight_user_orders, axis=1))
+        else:
+            st.dataframe(sell_df)
     has_bid = not buy_df.empty
     has_ask = not sell_df.empty
 
-    if has_bid:
-        st.session_state.best_bid = buy_df.iloc[0]["PRICE"]
-        st.session_state.depth_bid = buy_df["QTY"].sum()
-        st.session_state.queue_pressure = buy_df.iloc[0]["QTY"] / st.session_state.depth_bid
-        st.session_state.vwap_bid = (buy_df["PRICE"] * buy_df["QTY"]).sum() / st.session_state.depth_bid
-    else:
-        st.session_state.best_bid = 0
-        st.session_state.depth_bid = 0
-        st.session_state.queue_pressure = 0
-        st.session_state.vwap_bid = 0
+    st.session_state.refresh_count += 1
+    if st.session_state.refresh_count % st.session_state.metrics_every == 0:
+        if has_bid:
+            st.session_state.best_bid = buy_df.iloc[0]["PRICE"]
+            st.session_state.depth_bid = buy_df["QTY"].sum()
+            st.session_state.queue_pressure = buy_df.iloc[0]["QTY"] / st.session_state.depth_bid
+            st.session_state.vwap_bid = (buy_df["PRICE"] * buy_df["QTY"]).sum() / st.session_state.depth_bid
+        else:
+            st.session_state.best_bid = 0
+            st.session_state.depth_bid = 0
+            st.session_state.queue_pressure = 0
+            st.session_state.vwap_bid = 0
 
-    if has_ask:
-        st.session_state.best_ask = sell_df.iloc[0]["PRICE"]
-        st.session_state.depth_ask = sell_df["QTY"].sum()
-        st.session_state.vwap_ask = (sell_df["PRICE"] * sell_df["QTY"]).sum() / st.session_state.depth_ask
-    else:
-        st.session_state.best_ask = 0
-        st.session_state.depth_ask = 0
-        st.session_state.vwap_ask = 0
+        if has_ask:
+            st.session_state.best_ask = sell_df.iloc[0]["PRICE"]
+            st.session_state.depth_ask = sell_df["QTY"].sum()
+            st.session_state.vwap_ask = (sell_df["PRICE"] * sell_df["QTY"]).sum() / st.session_state.depth_ask
+        else:
+            st.session_state.best_ask = 0
+            st.session_state.depth_ask = 0
+            st.session_state.vwap_ask = 0
 
-    # Now compute bid–ask derived metrics
-    if has_bid and has_ask:
-        bid = st.session_state.best_bid
-        ask = st.session_state.best_ask
+        if has_bid and has_ask:
+            bid = st.session_state.best_bid
+            ask = st.session_state.best_ask
 
-        st.session_state.midprice = (bid + ask) / 2
-        st.session_state.obi = (bid - ask) / (bid + ask)
-        st.session_state.relative_spread = (ask - bid) / st.session_state.midprice
-        st.session_state.ofi = bid * buy_df.iloc[0]["QTY"] - ask * sell_df.iloc[0]["QTY"]
-        st.session_state.microprice = (
-            ask * buy_df.iloc[0]["QTY"] + bid * sell_df.iloc[0]["QTY"]
-        ) / (buy_df.iloc[0]["QTY"] + sell_df.iloc[0]["QTY"])
-    else:
-        st.session_state.midprice = 0
-        st.session_state.obi = 0
-        st.session_state.relative_spread = 0
-        st.session_state.ofi = 0
-        st.session_state.microprice = 0
+            st.session_state.midprice = (bid + ask) / 2
+            st.session_state.obi = (bid - ask) / (bid + ask)
+            st.session_state.relative_spread = (ask - bid) / st.session_state.midprice
+            st.session_state.ofi = bid * buy_df.iloc[0]["QTY"] - ask * sell_df.iloc[0]["QTY"]
+            st.session_state.microprice = (
+                ask * buy_df.iloc[0]["QTY"] + bid * sell_df.iloc[0]["QTY"]
+            ) / (buy_df.iloc[0]["QTY"] + sell_df.iloc[0]["QTY"])
+        else:
+            st.session_state.midprice = 0
+            st.session_state.obi = 0
+            st.session_state.relative_spread = 0
+            st.session_state.ofi = 0
+            st.session_state.microprice = 0
 else:
     st.info("Order book is empty.")
 
