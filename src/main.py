@@ -333,6 +333,7 @@ if st.sidebar.button("Submit Order"):
         "side": side_lower,
         "price": price_f,
         "qty": qty_int,
+        "type": otype,
     }
 
     uo_ptr = lib.make_user_order(
@@ -539,20 +540,19 @@ def update_user_pnl(trade_row: pd.Series):
             st.session_state.avg_cost = 0.0
 
 
-st.subheader("User Trade P&L")
+st.subheader("User Orders & P&L")
 
+user_trades = None
 if df_trades is not None and not df_trades.empty:
     user_trades = df_trades[df_trades["ORDER_ID"].isin(st.session_state.user_orders)]
     user_trades = user_trades[user_trades["QUANTITY"] > 0]
+    user_trades = user_trades.sort_values("TRADE_ID")
 
     for _, t in user_trades.iterrows():
         update_user_pnl(t)
 
-    if not df_trades.empty:
-        last_prices = df_trades["PRICE"].tail(5)
-        last_price = float(last_prices.mean()) if len(last_prices) > 0 else st.session_state.avg_cost
-    else:
-        last_price = st.session_state.avg_cost
+    last_prices = df_trades["PRICE"].tail(5)
+    last_price = float(last_prices.mean()) if len(last_prices) > 0 else st.session_state.avg_cost
 
     unrealized = (last_price - st.session_state.avg_cost) * st.session_state.position_qty
     total_pnl = st.session_state.realized_pnl + unrealized
@@ -567,8 +567,71 @@ if df_trades is not None and not df_trades.empty:
     with cC:
         st.metric("Unrealized P&L", f"${unrealized:.2f}")
         st.metric("Total P&L", f"${total_pnl:.2f}")
-
-    st.write("User trades only:")
-    st.dataframe(user_trades)
 else:
     st.info("No trades executed yet.")
+
+rows = []
+order_pnl = {}
+if user_trades is not None and not user_trades.empty:
+    pos_qty = 0
+    avg_cost = 0.0
+    for _, t in user_trades.iterrows():
+        oid = int(t["ORDER_ID"])
+        side = str(t["SIDE"]).lower()
+        price = float(t["PRICE"])
+        qty = int(t["QUANTITY"])
+        if side == "buy":
+            total_before = avg_cost * pos_qty
+            pos_qty += qty
+            avg_cost = (total_before + price * qty) / pos_qty if pos_qty > 0 else 0.0
+        else:
+            realized = (price - avg_cost) * qty
+            order_pnl[oid] = order_pnl.get(oid, 0.0) + realized
+            pos_qty -= qty
+            if pos_qty == 0:
+                avg_cost = 0.0
+
+filled_qty = {}
+avg_fill_price = {}
+if user_trades is not None and not user_trades.empty:
+    grouped = user_trades.groupby("ORDER_ID")
+    filled_qty = grouped["QUANTITY"].sum().to_dict()
+    avg_fill_price = (grouped.apply(lambda g: (g["PRICE"] * g["QUANTITY"]).sum() / g["QUANTITY"].sum())
+                      ).to_dict()
+
+for oid in sorted(st.session_state.user_orders):
+    meta = st.session_state.user_order_meta.get(oid, {})
+    side = meta.get("side", "")
+    qty = int(meta.get("qty", 0))
+    price = float(meta.get("price", 0.0))
+    otype = meta.get("type", "")
+    fqty = int(filled_qty.get(oid, 0))
+    avg_px = float(avg_fill_price.get(oid, 0.0)) if fqty > 0 else 0.0
+    remaining = max(qty - fqty, 0)
+    if fqty == 0:
+        status = "open"
+    elif fqty < qty:
+        status = "partially_filled"
+    else:
+        status = "filled"
+
+    rows.append(
+        {
+            "ORDER_ID": oid,
+            "SIDE": side,
+            "TYPE": otype,
+            "ORDER_QTY": qty,
+            "ORDER_PRICE": price,
+            "FILLED_QTY": fqty,
+            "AVG_FILL_PRICE": avg_px,
+            "REMAINING": remaining,
+            "STATUS": status,
+            "REALIZED_PNL": order_pnl.get(oid, 0.0) if side == "sell" else 0.0,
+        }
+    )
+
+if rows:
+    df_orders = pd.DataFrame(rows)
+    st.dataframe(df_orders)
+else:
+    st.info("No user orders yet.")
