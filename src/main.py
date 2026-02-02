@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 import time
 import platform
+import subprocess
 from threading import Thread
 import threading
 from io import StringIO
@@ -21,11 +22,36 @@ def _load_native_lib() -> ctypes.CDLL:
         lib_path = build_dir / "orderbook.so"
 
     if not lib_path.exists():
-        st.error(
-            f"Native library not found: {lib_path}\n"
-            "Make sure it is built on this system before running the app."
-        )
-        st.stop()
+        if system != "Windows":
+            build_dir.mkdir(parents=True, exist_ok=True)
+            cmd = [
+                "g++",
+                "-shared",
+                "-fPIC",
+                "-o",
+                str(lib_path),
+                str(root / "src" / "order.cpp"),
+                str(root / "src" / "orderbook.cpp"),
+                str(root / "src" / "wrapper.cpp"),
+                "-I",
+                str(root / "include"),
+                "-std=c++17",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode != 0 or not lib_path.exists():
+                st.error(
+                    "Native library build failed.\n"
+                    f"Command: {' '.join(cmd)}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}"
+                )
+                st.stop()
+        else:
+            st.error(
+                f"Native library not found: {lib_path}\n"
+                "Make sure it is built on this system before running the app."
+            )
+            st.stop()
 
     return ctypes.CDLL(str(lib_path))
 
