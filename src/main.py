@@ -545,7 +545,13 @@ if snapshot.strip():
             ask = local_best_ask
 
             st.session_state.midprice = (bid + ask) / 2
-            st.session_state.obi = (bid - ask) / (bid + ask)
+            total_depth = st.session_state.depth_bid + st.session_state.depth_ask
+            if total_depth > 0:
+                st.session_state.obi = (
+                    st.session_state.depth_bid - st.session_state.depth_ask
+                ) / total_depth
+            else:
+                st.session_state.obi = 0
             st.session_state.relative_spread = (ask - bid) / st.session_state.midprice
             st.session_state.ofi = bid * buy_df.iloc[0]["QTY"] - ask * sell_df.iloc[0]["QTY"]
             st.session_state.microprice = (
@@ -563,21 +569,21 @@ else:
 st.markdown('<div class="section-card"><div class="section-title">Market Snapshot</div>', unsafe_allow_html=True)
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.metric("Best Bid", f"${st.session_state.best_bid:.2f}")
-    st.metric("Best Ask", f"${st.session_state.best_ask:.2f}")
-    st.metric("Midprice", f"${st.session_state.midprice:.2f}")
+    st.metric("Best Bid", f"${st.session_state.best_bid:.4f}")
+    st.metric("Best Ask", f"${st.session_state.best_ask:.4f}")
+    st.metric("Midprice", f"${st.session_state.midprice:.4f}")
 with c2:
-    st.metric("OBI", f"{st.session_state.obi:.2f}")
-    st.metric("Relative Spread", f"{st.session_state.relative_spread:.2f}")
+    st.metric("OBI", f"{st.session_state.obi:.4f}")
+    st.metric("Relative Spread", f"{st.session_state.relative_spread:.4f}")
     st.metric("Depth Bid", f"{st.session_state.depth_bid}")
 with c3:
     st.metric("Depth Ask", f"{st.session_state.depth_ask}")
-    st.metric("VWAP Bid", f"${st.session_state.vwap_bid:.2f}")
-    st.metric("VWAP Ask", f"${st.session_state.vwap_ask:.2f}")
+    st.metric("VWAP Bid", f"${st.session_state.vwap_bid:.4f}")
+    st.metric("VWAP Ask", f"${st.session_state.vwap_ask:.4f}")
 with c4:
     st.metric("OFI", f"{st.session_state.ofi:.2f}")
-    st.metric("Queue Pressure", f"{st.session_state.queue_pressure:.2f}")
-    st.metric("Microprice", f"${st.session_state.microprice:.2f}")
+    st.metric("Queue Pressure", f"{st.session_state.queue_pressure:.4f}")
+    st.metric("Microprice", f"${st.session_state.microprice:.4f}")
 st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown('<div class="section-card"><div class="section-title">Trades</div>', unsafe_allow_html=True)
