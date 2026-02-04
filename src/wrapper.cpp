@@ -17,10 +17,11 @@ extern "C"{
     void set_random_config(float tick_size,
                            float price_sigma,
                            float market_prob,
+                           float cross_prob,
                            int expiry_seconds,
                            int min_qty,
                            int max_qty) {
-        setRandomConfig(tick_size, price_sigma, market_prob, expiry_seconds, min_qty, max_qty);
+        setRandomConfig(tick_size, price_sigma, market_prob, cross_prob, expiry_seconds, min_qty, max_qty);
     }
 
     void add_order(OrderBook* book, order* newOrder){

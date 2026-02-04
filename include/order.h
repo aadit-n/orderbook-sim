@@ -19,6 +19,7 @@ order randomOrder(int &nextID, float basePrice);
 void setRandomConfig(float tick_size,
                      float price_sigma,
                      float market_prob,
+                     float cross_prob,
                      int expiry_seconds,
                      int min_qty,
                      int max_qty);

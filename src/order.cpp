@@ -13,6 +13,7 @@ namespace {
         float tick_size = 0.01f;
         float price_sigma = 1.5f;
         float market_prob = 0.1f;
+        float cross_prob = 0.15f;
         int expiry_seconds = 0; // 0 = GTC
         int min_qty = 1;
         int max_qty = 200;
@@ -35,12 +36,14 @@ namespace {
 void setRandomConfig(float tick_size,
                      float price_sigma,
                      float market_prob,
+                     float cross_prob,
                      int expiry_seconds,
                      int min_qty,
                      int max_qty) {
     if (tick_size > 0.0f) g_cfg.tick_size = tick_size;
     if (price_sigma > 0.0f) g_cfg.price_sigma = price_sigma;
     if (market_prob >= 0.0f && market_prob <= 1.0f) g_cfg.market_prob = market_prob;
+    if (cross_prob >= 0.0f && cross_prob <= 1.0f) g_cfg.cross_prob = cross_prob;
     if (expiry_seconds >= 0) g_cfg.expiry_seconds = expiry_seconds;
     if (min_qty > 0) g_cfg.min_qty = min_qty;
     if (max_qty >= g_cfg.min_qty) g_cfg.max_qty = max_qty;
@@ -61,7 +64,14 @@ order randomOrder(int &nextID, float basePrice){
 
     float base = max(g_cfg.tick_size, basePrice);
     float offset = fabs(price_dist(generator));
-    float raw_price = (side == "buy") ? (base - offset) : (base + offset);
+    float r_cross = std::generate_canonical<float, 10>(generator);
+    bool cross = r_cross < g_cfg.cross_prob;
+    float raw_price;
+    if (side == "buy") {
+        raw_price = cross ? (base + offset) : (base - offset);
+    } else {
+        raw_price = cross ? (base - offset) : (base + offset);
+    }
     float snapped = snap_to_tick(raw_price, g_cfg.tick_size);
     newOrder.price = max(g_cfg.tick_size, snapped);
     newOrder.time = time(0);

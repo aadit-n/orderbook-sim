@@ -179,7 +179,7 @@ class OrderBook(Structure):
 lib.creatBook.restype = POINTER(OrderBook)
 lib.generate_random_order.argtypes = [POINTER(c_int), c_float]
 lib.generate_random_order.restype = POINTER(order)
-lib.set_random_config.argtypes = [c_float, c_float, c_float, c_int, c_int, c_int]
+lib.set_random_config.argtypes = [c_float, c_float, c_float, c_float, c_int, c_int, c_int]
 lib.add_order.argtypes = [POINTER(OrderBook), POINTER(order)]
 lib.get_orderbook_snapshot.argtypes = [POINTER(OrderBook)]
 lib.get_orderbook_snapshot.restype = ctypes.c_char_p
@@ -246,6 +246,7 @@ if "initialized" not in st.session_state:
     st.session_state.tick_size = 0.01
     st.session_state.price_sigma = 1.5
     st.session_state.market_prob = 0.1
+    st.session_state.cross_prob = 0.15
     st.session_state.expiry_seconds = 0
     st.session_state.min_qty = 1
     st.session_state.max_qty = 200
@@ -359,6 +360,15 @@ market_prob = st.sidebar.slider(
 )
 st.session_state.market_prob = market_prob / 100.0
 
+cross_prob = st.sidebar.slider(
+    "Crossing Limit Order %",
+    min_value=0,
+    max_value=50,
+    value=int(st.session_state.cross_prob * 100),
+    step=1,
+)
+st.session_state.cross_prob = cross_prob / 100.0
+
 expiry_seconds = st.sidebar.number_input(
     "Expiry Seconds (0 = GTC)",
     min_value=0,
@@ -386,6 +396,7 @@ lib.set_random_config(
     c_float(st.session_state.tick_size),
     c_float(st.session_state.price_sigma),
     c_float(st.session_state.market_prob),
+    c_float(st.session_state.cross_prob),
     c_int(st.session_state.expiry_seconds),
     c_int(st.session_state.min_qty),
     c_int(st.session_state.max_qty),
